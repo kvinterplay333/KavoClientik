@@ -10,6 +10,10 @@ import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.mob.HostileEntity;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.item.BowItem;
+import net.minecraft.item.CrossbowItem;
+import net.minecraft.item.EnderPearlItem;
+import net.minecraft.item.ItemStack;
 import net.minecraft.util.Hand;
 import net.minecraft.util.math.MathHelper;
 import org.lwjgl.glfw.GLFW;
@@ -17,26 +21,27 @@ import org.lwjgl.glfw.GLFW;
 public class KavoClient implements ClientModInitializer {
     public static final String MOD_NAME = "✦ KAVO CLIENT";
 
-    // Состояния модулей
+    // Состояния переключателей
     public static boolean killauraEnabled = false;
     public static boolean aimbotEnabled = false;
     public static boolean fovCircleEnabled = true;
+    public static boolean rangeIndicatorEnabled = true;
+    public static boolean chinaHatEnabled = true;
+    public static boolean trajectoriesEnabled = true;
 
-    // Режим выбора целей: 0 - Только игроки, 1 - Враждебные мобы, 2 - Все живые
-    public static int targetMode = 1; 
+    // Параметры боя и визуала
+    public static int targetMode = 1;         // 0 - Игроки, 1 - Враждебные мобы, 2 - Все
+    public static float attackRange = 3.8f;
+    public static float aimFov = 75.0f;
 
-    // Настройки боя
-    public static float attackRange = 3.8f;      // Дистанция атаки
-    public static float aimFov = 70.0f;          // Угол захвата FOV (в градусах)
-    public static float aimSmoothness = 3.0f;    // Плавность: 1.0 (резко) - 10.0 (плавно)
-
+    public static Entity currentTarget = null;
     private boolean f8PressedLastTick = false;
 
     @Override
     public void onInitializeClient() {
-        System.out.println(MOD_NAME + " инициализирован!");
+        System.out.println(MOD_NAME + " успешно запущен!");
 
-        // Открытие GUI на F8
+        // Обработка логики на каждый тик клиента
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (client.player == null || client.world == null) return;
 
@@ -53,32 +58,69 @@ public class KavoClient implements ClientModInitializer {
             f8PressedLastTick = isF8Down;
 
             if (killauraEnabled) runKillAura(client);
-            if (aimbotEnabled) runAimBot(client);
+            if (aimbotEnabled) runAimbot(client);
+            else currentTarget = null;
         });
 
-        // Отрисовка круга FOV прямо в игре
+        // Отрисовка визуала на экране
         HudRenderCallback.EVENT.register((context, tickCounter) -> {
             MinecraftClient client = MinecraftClient.getInstance();
-            if (client.player == null || !aimbotEnabled || !fovCircleEnabled) return;
+            if (client.player == null || client.world == null) return;
 
             int centerX = context.getScaledWindowWidth() / 2;
             int centerY = context.getScaledWindowHeight() / 2;
-            int radius = (int) (aimFov * 1.5f);
+            int screenH = context.getScaledWindowHeight();
 
-            // Точечная отрисовка круга FOV
-            for (int angle = 0; angle < 360; angle += 12) {
+            // Лаймовый круг FOV
+            if (aimbotEnabled && fovCircleEnabled) {
+                int radius = (int) (aimFov * 1.5f);
+                for (int a = 0; a < 360; a += 12) {
+                    double rad = Math.toRadians(a);
+                    int px = (int) (centerX + radius * Math.cos(rad));
+                    int py = (int) (centerY + radius * Math.sin(rad));
+                    context.fill(px, py, px + 2, py + 2, 0xFFA3E635);
+                }
+            }
+
+            // Индикатор дистанции внизу экрана
+            if (rangeIndicatorEnabled) {
+                int barW = 140;
+                int barX = centerX - barW / 2;
+                int barY = screenH - 52;
+                context.fill(barX - 2, barY - 2, barX + barW + 2, barY + 14, 0x9012161A);
+                int fillW = (int) (barW * MathHelper.clamp(attackRange / 6.0f, 0.0f, 1.0f));
+                context.fill(barX, barY, barX + fillW, barY + 12, 0xFFA3E635);
+                context.drawText(client.textRenderer, String.format("Дистанция: %.1f м", attackRange), barX + 6, barY + 2, 0xFF000000, false);
+            }
+
+            // Индикатор траектории броска
+            if (trajectoriesEnabled) {
+                ItemStack stack = client.player.getMainHandStack();
+                if (stack.getItem() instanceof EnderPearlItem || stack.getItem() instanceof BowItem || stack.getItem() instanceof CrossbowItem) {
+                    context.fill(centerX - 2, centerY + 22, centerX + 2, centerY + 26, 0xFFA3E635);
+                    context.drawText(client.textRenderer, "✦ Траектория активна", centerX - 50, centerY + 32, 0xFFA3E635, true);
+                }
+            }
+
+            // Маркер направления на цель
+            if (chinaHatEnabled && currentTarget != null) {
+                double dx = currentTarget.getX() - client.player.getX();
+                double dz = currentTarget.getZ() - client.player.getZ();
+                float angle = (float) Math.toDegrees(Math.atan2(dz, dx)) - client.player.getYaw() - 90;
+
+                int radDist = 48;
                 double rad = Math.toRadians(angle);
-                int x = (int) (centerX + radius * Math.cos(rad));
-                int y = (int) (centerY + radius * Math.sin(rad));
-                context.fill(x, y, x + 2, y + 2, 0xAA00FFFF);
+                int markerX = (int) (centerX + radDist * Math.sin(rad));
+                int markerY = (int) (centerY - radDist * Math.cos(rad));
+
+                context.fill(markerX - 3, markerY - 3, markerX + 3, markerY + 3, 0xFFA3E635);
+                context.drawText(client.textRenderer, "TARGET", markerX - 14, markerY - 12, 0xFFA3E635, true);
             }
         });
     }
 
     public static boolean isValidTarget(Entity entity, MinecraftClient client) {
-        if (!(entity instanceof LivingEntity living) || !living.isAlive() || entity == client.player) {
-            return false;
-        }
+        if (!(entity instanceof LivingEntity living) || !living.isAlive() || entity == client.player) return false;
         return switch (targetMode) {
             case 0 -> entity instanceof PlayerEntity;
             case 1 -> entity instanceof HostileEntity;
@@ -88,33 +130,28 @@ public class KavoClient implements ClientModInitializer {
     }
 
     private void runKillAura(MinecraftClient client) {
-        // Проверка кулдауна удара (удар наносится только при 100% готовности оружия)
         if (client.player.getAttackCooldownProgress(0.5f) < 1.0f) return;
 
         for (Entity entity : client.world.getEntities()) {
-            if (isValidTarget(entity, client)) {
-                if (client.player.distanceTo(entity) <= attackRange) {
-                    client.interactionManager.attackEntity(client.player, entity);
-                    client.player.swingHand(Hand.MAIN_HAND);
-                    break;
-                }
+            if (isValidTarget(entity, client) && client.player.distanceTo(entity) <= attackRange) {
+                client.interactionManager.attackEntity(client.player, entity);
+                client.player.swingHand(Hand.MAIN_HAND);
+                break;
             }
         }
     }
 
-    private void runAimBot(MinecraftClient client) {
-        Entity bestTarget = null;
+    private void runAimbot(MinecraftClient client) {
+        Entity target = null;
         double minDistance = Double.MAX_VALUE;
 
         for (Entity entity : client.world.getEntities()) {
             if (!isValidTarget(entity, client)) continue;
-
             double dist = client.player.distanceTo(entity);
             if (dist > 8.0) continue;
 
-            // Расчет углов
             double dx = entity.getX() - client.player.getX();
-            double dy = (entity.getEyeY()) - client.player.getEyeY();
+            double dy = entity.getEyeY() - client.player.getEyeY();
             double dz = entity.getZ() - client.player.getZ();
             double distXZ = Math.sqrt(dx * dx + dz * dz);
 
@@ -124,19 +161,20 @@ public class KavoClient implements ClientModInitializer {
             float diffYaw = MathHelper.wrapDegrees(targetYaw - client.player.getYaw());
             float diffPitch = MathHelper.wrapDegrees(targetPitch - client.player.getPitch());
 
-            // Проверка попадания в круг FOV
             if (Math.abs(diffYaw) <= aimFov / 2.0f && Math.abs(diffPitch) <= aimFov / 2.0f) {
                 if (dist < minDistance) {
                     minDistance = dist;
-                    bestTarget = entity;
+                    target = entity;
                 }
             }
         }
 
-        if (bestTarget != null) {
-            double dx = bestTarget.getX() - client.player.getX();
-            double dy = bestTarget.getEyeY() - client.player.getEyeY();
-            double dz = bestTarget.getZ() - client.player.getZ();
+        currentTarget = target;
+
+        if (target != null) {
+            double dx = target.getX() - client.player.getX();
+            double dy = target.getEyeY() - client.player.getEyeY();
+            double dz = target.getZ() - client.player.getZ();
             double distXZ = Math.sqrt(dx * dx + dz * dz);
 
             float targetYaw = (float) Math.toDegrees(Math.atan2(-dx, dz));
@@ -145,10 +183,9 @@ public class KavoClient implements ClientModInitializer {
             float diffYaw = MathHelper.wrapDegrees(targetYaw - client.player.getYaw());
             float diffPitch = MathHelper.wrapDegrees(targetPitch - client.player.getPitch());
 
-            // Плавное наведение
-            float smooth = Math.max(1.0f, aimSmoothness);
-            client.player.setYaw(client.player.getYaw() + diffYaw / smooth);
-            client.player.setPitch(client.player.getPitch() + diffPitch / smooth);
+            // Плавное смещение углов
+            client.player.setYaw(client.player.getYaw() + diffYaw * 0.2f);
+            client.player.setPitch(client.player.getPitch() + diffPitch * 0.2f);
         }
     }
 }
