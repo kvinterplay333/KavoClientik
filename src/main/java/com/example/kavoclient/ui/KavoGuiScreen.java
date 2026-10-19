@@ -1,25 +1,18 @@
 package com.example.kavoclient.ui;
 
-import com.example.kavoclient.KavoClient;
+import com.example.kavoclient.modules.Module;
+import com.example.kavoclient.modules.ModuleManager;
+import com.example.kavoclient.settings.Setting;
+import com.example.kavoclient.settings.Setting.*;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.text.Text;
+import java.util.List;
 
 public class KavoGuiScreen extends Screen {
 
-    public enum Tab {
-        COMBAT("Бой"),
-        VISUALS("Визуалы"),
-        MOVEMENT("Движение"),
-        SETTINGS("Настройки");
-
-        private final String name;
-        Tab(String name) { this.name = name; }
-        public String getName() { return name; }
-    }
-
-    private static Tab selectedTab = Tab.VISUALS;
-    private final Animation tabIndicatorAnim = new Animation(45.0f, 14.0f);
+    private static Module.Category currentCategory = Module.Category.COMBAT;
+    private final Animation sidebarSelector = new Animation(45.0f, 16.0f);
 
     public KavoGuiScreen() {
         super(Text.literal("KavoClient Menu"));
@@ -38,127 +31,133 @@ public class KavoGuiScreen extends Screen {
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         this.renderBackground(context, mouseX, mouseY, delta);
-        tabIndicatorAnim.update(delta);
+        sidebarSelector.update(delta);
 
-        int mainW = 420;
-        int mainH = 260;
+        int mainW = 460;
+        int mainH = 280;
         int mainX = (this.width - mainW) / 2;
         int mainY = (this.height - mainH) / 2;
-        int sidebarW = 110;
+        int sidebarW = 120;
 
-        // Матовый графитовый фон и акцентная лаймовая полоса
-        context.fill(mainX, mainY, mainX + mainW, mainY + mainH, 0xD012161A);
+        // Матовый фон и лаймовая полоса
+        context.fill(mainX, mainY, mainX + mainW, mainY + mainH, 0xD9111418);
         context.fill(mainX, mainY, mainX + mainW, mainY + 2, 0xFFA3E635);
 
         // Боковая панель
-        context.fill(mainX, mainY + 2, mainX + sidebarW, mainY + mainH, 0x50000000);
-        context.drawText(this.textRenderer, "✦ KAVO", mainX + 16, mainY + 14, 0xFFA3E635, false);
+        context.fill(mainX, mainY + 2, mainX + sidebarW, mainY + mainH, 0x40000000);
+        context.drawText(this.textRenderer, "✦ KAVO CLIENT", mainX + 14, mainY + 14, 0xFFA3E635, false);
 
-        Tab[] tabs = Tab.values();
-        for (int i = 0; i < tabs.length; i++) {
-            Tab tab = tabs[i];
+        Module.Category[] categories = Module.Category.values();
+        for (int i = 0; i < categories.length; i++) {
+            Module.Category cat = categories[i];
             int itemY = mainY + 45 + i * 28;
 
-            if (tab == selectedTab) {
-                tabIndicatorAnim.setTarget((float) itemY);
+            if (cat == currentCategory) {
+                sidebarSelector.setTarget((float) itemY);
             }
 
-            int textColor = (tab == selectedTab) ? 0xFFFFFFFF : 0xFF71717A;
-            context.drawText(this.textRenderer, tab.getName(), mainX + 24, itemY + 4, textColor, false);
+            int textColor = (cat == currentCategory) ? 0xFFFFFFFF : 0xFF71717A;
+            context.drawText(this.textRenderer, cat.getLabel(), mainX + 22, itemY + 4, textColor, false);
         }
 
-        // Лаймовый индикатор выбранной вкладки
-        int indicatorY = (int) tabIndicatorAnim.getValue();
-        context.fill(mainX + 4, indicatorY, mainX + 7, indicatorY + 16, 0xFFA3E635);
+        // Лаймовый маркер выбранной вкладки
+        int markerY = (int) sidebarSelector.getValue();
+        context.fill(mainX + 4, markerY, mainX + 7, markerY + 16, 0xFFA3E635);
 
-        // Разделитель панелей
+        // Разделитель
         context.fill(mainX + sidebarW, mainY + 2, mainX + sidebarW + 1, mainY + mainH, 0x20FFFFFF);
 
-        // Правая часть (содержимое)
+        // Список модулей выбранной категории
         int contentX = mainX + sidebarW + 16;
         int contentY = mainY + 16;
         int cardW = mainW - sidebarW - 32;
 
-        context.drawText(this.textRenderer, selectedTab.getName().toUpperCase(), contentX, contentY, 0xFFA1A1AA, false);
+        context.drawText(this.textRenderer, currentCategory.getLabel().toUpperCase(), contentX, contentY, 0xFFA1A1AA, false);
 
-        switch (selectedTab) {
-            case COMBAT -> {
-                drawToggle(context, contentX, contentY + 20, cardW, 26, "KillAura", KavoClient.killauraEnabled);
-                drawToggle(context, contentX, contentY + 52, cardW, 26, "AimBot", KavoClient.aimbotEnabled);
-                String modeLabel = switch (KavoClient.targetMode) {
-                    case 0 -> "Игроки";
-                    case 1 -> "Враждебные мобы";
-                    default -> "Все сущности";
-                };
-                drawOption(context, contentX, contentY + 84, cardW, 26, "Фильтр целей: [" + modeLabel + "]");
-                drawOption(context, contentX, contentY + 116, cardW, 26, String.format("Дистанция атаки: [%.1f м]", KavoClient.attackRange));
+        List<Module> categoryModules = ModuleManager.getModulesByCategory(currentCategory);
+        int currentY = contentY + 18;
+
+        for (Module m : categoryModules) {
+            // Карточка модуля
+            context.fill(contentX, currentY, contentX + cardW, currentY + 24, 0x25FFFFFF);
+            context.drawText(this.textRenderer, m.getName(), contentX + 8, currentY + 7, 0xFFE4E4E7, false);
+
+            int toggleColor = m.isEnabled() ? 0xFFA3E635 : 0xFF3F3F46;
+            context.fill(contentX + cardW - 20, currentY + 6, contentX + cardW - 8, currentY + 18, toggleColor);
+
+            currentY += 26;
+
+            // Настройки внутри модуля
+            for (Setting s : m.getSettings()) {
+                context.fill(contentX + 12, currentY, contentX + cardW, currentY + 18, 0x15FFFFFF);
+
+                if (s instanceof BooleanSetting bs) {
+                    context.drawText(this.textRenderer, "• " + bs.getName(), contentX + 18, currentY + 5, 0xFF9CA3AF, false);
+                    int sColor = bs.isEnabled() ? 0xFFA3E635 : 0xFF3F3F46;
+                    context.fill(contentX + cardW - 16, currentY + 5, contentX + cardW - 8, currentY + 13, sColor);
+                } else if (s instanceof NumberSetting ns) {
+                    String valStr = String.format("• %s: %.1f", ns.getName(), ns.getValue());
+                    context.drawText(this.textRenderer, valStr, contentX + 18, currentY + 5, 0xFFA3E635, false);
+                } else if (s instanceof ModeSetting ms) {
+                    context.drawText(this.textRenderer, "• " + ms.getName() + ": [" + ms.getMode() + "]", contentX + 18, currentY + 5, 0xFF38BDF8, false);
+                }
+                currentY += 20;
             }
-            case VISUALS -> {
-                drawToggle(context, contentX, contentY + 20, cardW, 26, "Круг захвата FOV", KavoClient.fovCircleEnabled);
-                drawToggle(context, contentX, contentY + 52, cardW, 26, "Индикатор дистанции", KavoClient.rangeIndicatorEnabled);
-                drawToggle(context, contentX, contentY + 84, cardW, 26, "ChinaHat / Радар цели", KavoClient.chinaHatEnabled);
-                drawToggle(context, contentX, contentY + 116, cardW, 26, "Траектории бросков", KavoClient.trajectoriesEnabled);
-            }
-            case MOVEMENT -> {
-                drawOption(context, contentX, contentY + 20, cardW, 26, "AutoSprint: [ВСЕГДА ВКЛ]");
-                drawOption(context, contentX, contentY + 52, cardW, 26, "SafeWalk: [ВЫКЛ]");
-            }
-            case SETTINGS -> {
-                drawOption(context, contentX, contentY + 20, cardW, 26, "Тема GUI: [Лаймово-матовая]");
-                drawOption(context, contentX, contentY + 52, cardW, 26, "Закрыть меню: [Клавиша F8]");
-            }
+            currentY += 4;
         }
 
         super.render(context, mouseX, mouseY, delta);
     }
 
-    private void drawToggle(DrawContext context, int x, int y, int w, int h, String label, boolean active) {
-        context.fill(x, y, x + w, y + h, 0x30FFFFFF);
-        context.drawText(this.textRenderer, label, x + 10, y + 8, 0xFFE4E4E7, false);
-        int switchColor = active ? 0xFFA3E635 : 0xFF3F3F46;
-        context.fill(x + w - 24, y + 7, x + w - 10, y + 19, switchColor);
-    }
-
-    private void drawOption(DrawContext context, int x, int y, int w, int h, String label) {
-        context.fill(x, y, x + w, y + h, 0x30FFFFFF);
-        context.drawText(this.textRenderer, label, x + 10, y + 8, 0xFFA3E635, false);
-    }
-
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         if (button == 0) {
-            int mainW = 420;
-            int mainH = 260;
+            int mainW = 460;
+            int mainH = 280;
             int mainX = (this.width - mainW) / 2;
             int mainY = (this.height - mainH) / 2;
-            int sidebarW = 110;
+            int sidebarW = 120;
 
-            // Клик по боковым вкладкам
-            Tab[] tabs = Tab.values();
-            for (int i = 0; i < tabs.length; i++) {
+            // Переключение вкладок слева
+            Module.Category[] categories = Module.Category.values();
+            for (int i = 0; i < categories.length; i++) {
                 int itemY = mainY + 45 + i * 28;
                 if (mouseX >= mainX && mouseX <= mainX + sidebarW && mouseY >= itemY && mouseY <= itemY + 24) {
-                    selectedTab = tabs[i];
+                    currentCategory = categories[i];
                     return true;
                 }
             }
 
+            // Клики по модулям и настройкам справа
             int contentX = mainX + sidebarW + 16;
-            int contentY = mainY + 16;
+            int currentY = mainY + 34;
             int cardW = mainW - sidebarW - 32;
 
-            if (selectedTab == Tab.COMBAT) {
-                if (in(mouseX, mouseY, contentX, contentY + 20, cardW, 26)) KavoClient.killauraEnabled = !KavoClient.killauraEnabled;
-                if (in(mouseX, mouseY, contentX, contentY + 52, cardW, 26)) KavoClient.aimbotEnabled = !KavoClient.aimbotEnabled;
-                if (in(mouseX, mouseY, contentX, contentY + 84, cardW, 26)) KavoClient.targetMode = (KavoClient.targetMode + 1) % 3;
-                if (in(mouseX, mouseY, contentX, contentY + 116, cardW, 26)) {
-                    KavoClient.attackRange = (KavoClient.attackRange >= 5.0f) ? 3.5f : KavoClient.attackRange + 0.5f;
+            for (Module m : ModuleManager.getModulesByCategory(currentCategory)) {
+                // Клик по модулю (Вкл/Выкл)
+                if (in(mouseX, mouseY, contentX, currentY, cardW, 24)) {
+                    m.toggle();
+                    return true;
                 }
-            } else if (selectedTab == Tab.VISUALS) {
-                if (in(mouseX, mouseY, contentX, contentY + 20, cardW, 26)) KavoClient.fovCircleEnabled = !KavoClient.fovCircleEnabled;
-                if (in(mouseX, mouseY, contentX, contentY + 52, cardW, 26)) KavoClient.rangeIndicatorEnabled = !KavoClient.rangeIndicatorEnabled;
-                if (in(mouseX, mouseY, contentX, contentY + 84, cardW, 26)) KavoClient.chinaHatEnabled = !KavoClient.chinaHatEnabled;
-                if (in(mouseX, mouseY, contentX, contentY + 116, cardW, 26)) KavoClient.trajectoriesEnabled = !KavoClient.trajectoriesEnabled;
+                currentY += 26;
+
+                // Клики по параметрам модуля
+                for (Setting s : m.getSettings()) {
+                    if (in(mouseX, mouseY, contentX + 12, currentY, cardW - 12, 18)) {
+                        if (s instanceof BooleanSetting bs) {
+                            bs.toggle();
+                        } else if (s instanceof NumberSetting ns) {
+                            double next = ns.getValue() + 5.0;
+                            if (next > ns.getMax()) next = ns.getMin();
+                            ns.setValue(next);
+                        } else if (s instanceof ModeSetting ms) {
+                            ms.cycle();
+                        }
+                        return true;
+                    }
+                    currentY += 20;
+                }
+                currentY += 4;
             }
         }
         return super.mouseClicked(mouseX, mouseY, button);
