@@ -19,7 +19,7 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: build project
-        run: ./gradlew build
+        run: ./gradlew build --no-configuration-cache
 
       - name: capture build artifacts
         uses: actions/upload-artifact@v4
