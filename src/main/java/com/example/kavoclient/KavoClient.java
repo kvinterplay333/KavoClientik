@@ -4,6 +4,7 @@ import com.example.kavoclient.ui.KavoGuiScreen;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.util.InputUtil;
+import net.minecraft.command.argument.EntityAnchorArgumentType;
 import org.lwjgl.glfw.GLFW;
 
 public class KavoClient implements ClientModInitializer {
@@ -67,7 +68,7 @@ public class KavoClient implements ClientModInitializer {
             }
         }
         if (target != null) {
-            client.player.lookAt(net.command.argument.EntityAnchorArgumentType.EntityAnchor.EYES, target.getPos());
+            client.player.lookAt(EntityAnchorArgumentType.EntityAnchor.EYES, target.getPos());
         }
     }
 }
