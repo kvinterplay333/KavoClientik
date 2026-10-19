@@ -7,6 +7,20 @@ import net.minecraft.text.Text;
 
 public class KavoGuiScreen extends Screen {
 
+    public enum Tab {
+        COMBAT("Бой"),
+        VISUALS("Визуалы"),
+        MOVEMENT("Движение"),
+        SETTINGS("Настройки");
+
+        private final String name;
+        Tab(String name) { this.name = name; }
+        public String getName() { return name; }
+    }
+
+    private static Tab selectedTab = Tab.VISUALS;
+    private final Animation tabIndicatorAnim = new Animation(45.0f, 14.0f);
+
     public KavoGuiScreen() {
         super(Text.literal("KavoClient Menu"));
     }
@@ -16,7 +30,6 @@ public class KavoGuiScreen extends Screen {
         return false;
     }
 
-    // Отключение мыльного блура 1.21: рисуем четкое легкое затемнение
     @Override
     public void renderBackground(DrawContext context, int mouseX, int mouseY, float delta) {
         context.fill(0, 0, this.width, this.height, 0x66000000);
@@ -25,125 +38,133 @@ public class KavoGuiScreen extends Screen {
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         this.renderBackground(context, mouseX, mouseY, delta);
+        tabIndicatorAnim.update(delta);
 
-        int panelW = 280;
-        int panelH = 220;
-        int x = (this.width - panelW) / 2;
-        int y = (this.height - panelH) / 2;
+        int mainW = 420;
+        int mainH = 260;
+        int mainX = (this.width - mainW) / 2;
+        int mainY = (this.height - mainH) / 2;
+        int sidebarW = 110;
 
-        // Корпус панели (сплошной глубокий темно-серый, без прозрачного мыла)
-        context.fill(x, y, x + panelW, y + panelH, 0xFF14141E);
-        // Неоновая рамка
-        context.fill(x, y, x + panelW, y + 2, 0xFF3B82F6);
-        context.fill(x, y + panelH - 2, x + panelW, y + panelH, 0xFF3B82F6);
-        context.fill(x, y, x + 2, y + panelH, 0xFF3B82F6);
-        context.fill(x + panelW - 2, y, x + panelW, y + panelH, 0xFF3B82F6);
+        // Матовый графитовый фон и акцентная лаймовая полоса
+        context.fill(mainX, mainY, mainX + mainW, mainY + mainH, 0xD012161A);
+        context.fill(mainX, mainY, mainX + mainW, mainY + 2, 0xFFA3E635);
 
-        // Заголовок
-        context.drawText(this.textRenderer, "✦ KAVO CLIENT | МОДУЛИ И НАСТРОЙКИ", x + 12, y + 10, 0xFFE2E8F0, true);
+        // Боковая панель
+        context.fill(mainX, mainY + 2, mainX + sidebarW, mainY + mainH, 0x50000000);
+        context.drawText(this.textRenderer, "✦ KAVO", mainX + 16, mainY + 14, 0xFFA3E635, false);
 
-        // 1. KillAura
-        drawButton(context, x + 15, y + 30, 250, 18, "KillAura: " + (KavoClient.killauraEnabled ? "[ВКЛ]" : "[ВЫКЛ]"), KavoClient.killauraEnabled);
+        Tab[] tabs = Tab.values();
+        for (int i = 0; i < tabs.length; i++) {
+            Tab tab = tabs[i];
+            int itemY = mainY + 45 + i * 28;
 
-        // 2. AimBot
-        drawButton(context, x + 15, y + 52, 250, 18, "AimBot: " + (KavoClient.aimbotEnabled ? "[ВКЛ]" : "[ВЫКЛ]"), KavoClient.aimbotEnabled);
+            if (tab == selectedTab) {
+                tabIndicatorAnim.setTarget((float) itemY);
+            }
 
-        // 3. Выбор целей (Entity Target)
-        String targetText = switch (KavoClient.targetMode) {
-            case 0 -> "Цели: [ИГРОКИ]";
-            case 1 -> "Цели: [ВРАЖДЕБНЫЕ МОБЫ]";
-            default -> "Цели: [ВСЕ СУЩЕСТВА]";
-        };
-        drawOption(context, x + 15, y + 74, 250, 18, targetText);
+            int textColor = (tab == selectedTab) ? 0xFFFFFFFF : 0xFF71717A;
+            context.drawText(this.textRenderer, tab.getName(), mainX + 24, itemY + 4, textColor, false);
+        }
 
-        // 4. Плавность Aim (Smooth)
-        String smoothText = "Плавность Aim: [" + (int)KavoClient.aimSmoothness + "x] (Клик: изменить)";
-        drawOption(context, x + 15, y + 96, 250, 18, smoothText);
+        // Лаймовый индикатор выбранной вкладки
+        int indicatorY = (int) tabIndicatorAnim.getValue();
+        context.fill(mainX + 4, indicatorY, mainX + 7, indicatorY + 16, 0xFFA3E635);
 
-        // 5. Угол захвата FOV
-        String fovText = "Радиус FOV: [" + (int)KavoClient.aimFov + "°] (Клик: изменить)";
-        drawOption(context, x + 15, y + 118, 250, 18, fovText);
+        // Разделитель панелей
+        context.fill(mainX + sidebarW, mainY + 2, mainX + sidebarW + 1, mainY + mainH, 0x20FFFFFF);
 
-        // 6. Дистанция удара (Range)
-        String rangeText = String.format("Дистанция удара: [%.1f м] (Клик: изменить)", KavoClient.attackRange);
-        drawOption(context, x + 15, y + 140, 250, 18, rangeText);
+        // Правая часть (содержимое)
+        int contentX = mainX + sidebarW + 16;
+        int contentY = mainY + 16;
+        int cardW = mainW - sidebarW - 32;
 
-        // 7. Круг FOV на экране
-        drawButton(context, x + 15, y + 162, 250, 18, "Отображать круг FOV: " + (KavoClient.fovCircleEnabled ? "[ДА]" : "[НЕТ]"), KavoClient.fovCircleEnabled);
+        context.drawText(this.textRenderer, selectedTab.getName().toUpperCase(), contentX, contentY, 0xFFA1A1AA, false);
 
-        // Подсказка снизу
-        context.drawText(this.textRenderer, "Закрыть меню: клавиша F8", x + 15, y + 195, 0xFF94A3B8, true);
+        switch (selectedTab) {
+            case COMBAT -> {
+                drawToggle(context, contentX, contentY + 20, cardW, 26, "KillAura", KavoClient.killauraEnabled);
+                drawToggle(context, contentX, contentY + 52, cardW, 26, "AimBot", KavoClient.aimbotEnabled);
+                String modeLabel = switch (KavoClient.targetMode) {
+                    case 0 -> "Игроки";
+                    case 1 -> "Враждебные мобы";
+                    default -> "Все сущности";
+                };
+                drawOption(context, contentX, contentY + 84, cardW, 26, "Фильтр целей: [" + modeLabel + "]");
+                drawOption(context, contentX, contentY + 116, cardW, 26, String.format("Дистанция атаки: [%.1f м]", KavoClient.attackRange));
+            }
+            case VISUALS -> {
+                drawToggle(context, contentX, contentY + 20, cardW, 26, "Круг захвата FOV", KavoClient.fovCircleEnabled);
+                drawToggle(context, contentX, contentY + 52, cardW, 26, "Индикатор дистанции", KavoClient.rangeIndicatorEnabled);
+                drawToggle(context, contentX, contentY + 84, cardW, 26, "ChinaHat / Радар цели", KavoClient.chinaHatEnabled);
+                drawToggle(context, contentX, contentY + 116, cardW, 26, "Траектории бросков", KavoClient.trajectoriesEnabled);
+            }
+            case MOVEMENT -> {
+                drawOption(context, contentX, contentY + 20, cardW, 26, "AutoSprint: [ВСЕГДА ВКЛ]");
+                drawOption(context, contentX, contentY + 52, cardW, 26, "SafeWalk: [ВЫКЛ]");
+            }
+            case SETTINGS -> {
+                drawOption(context, contentX, contentY + 20, cardW, 26, "Тема GUI: [Лаймово-матовая]");
+                drawOption(context, contentX, contentY + 52, cardW, 26, "Закрыть меню: [Клавиша F8]");
+            }
+        }
 
         super.render(context, mouseX, mouseY, delta);
     }
 
-    private void drawButton(DrawContext context, int bx, int by, int bw, int bh, String text, boolean active) {
-        int color = active ? 0xFF16A34A : 0xFFDC2626;
-        context.fill(bx, by, bx + bw, by + bh, 0xFF1E293B);
-        context.fill(bx, by, bx + 3, by + bh, color);
-        context.drawText(this.textRenderer, text, bx + 10, by + 5, active ? 0xFF4ADE80 : 0xFFF87171, true);
+    private void drawToggle(DrawContext context, int x, int y, int w, int h, String label, boolean active) {
+        context.fill(x, y, x + w, y + h, 0x30FFFFFF);
+        context.drawText(this.textRenderer, label, x + 10, y + 8, 0xFFE4E4E7, false);
+        int switchColor = active ? 0xFFA3E635 : 0xFF3F3F46;
+        context.fill(x + w - 24, y + 7, x + w - 10, y + 19, switchColor);
     }
 
-    private void drawOption(DrawContext context, int bx, int by, int bw, int bh, String text) {
-        context.fill(bx, by, bx + bw, by + bh, 0xFF1E293B);
-        context.fill(bx, by, bx + 3, by + bh, 0xFF3B82F6);
-        context.drawText(this.textRenderer, text, bx + 10, by + 5, 0xFF93C5FD, true);
+    private void drawOption(DrawContext context, int x, int y, int w, int h, String label) {
+        context.fill(x, y, x + w, y + h, 0x30FFFFFF);
+        context.drawText(this.textRenderer, label, x + 10, y + 8, 0xFFA3E635, false);
     }
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (button == 0) { // ЛКМ
-            int panelW = 280;
-            int panelH = 220;
-            int x = (this.width - panelW) / 2;
-            int y = (this.height - panelH) / 2;
+        if (button == 0) {
+            int mainW = 420;
+            int mainH = 260;
+            int mainX = (this.width - mainW) / 2;
+            int mainY = (this.height - mainH) / 2;
+            int sidebarW = 110;
 
-            // Клик KillAura
-            if (isInside(mouseX, mouseY, x + 15, y + 30, 250, 18)) {
-                KavoClient.killauraEnabled = !KavoClient.killauraEnabled;
-                return true;
+            // Клик по боковым вкладкам
+            Tab[] tabs = Tab.values();
+            for (int i = 0; i < tabs.length; i++) {
+                int itemY = mainY + 45 + i * 28;
+                if (mouseX >= mainX && mouseX <= mainX + sidebarW && mouseY >= itemY && mouseY <= itemY + 24) {
+                    selectedTab = tabs[i];
+                    return true;
+                }
             }
-            // Клик AimBot
-            if (isInside(mouseX, mouseY, x + 15, y + 52, 250, 18)) {
-                KavoClient.aimbotEnabled = !KavoClient.aimbotEnabled;
-                return true;
-            }
-            // Переключение целей
-            if (isInside(mouseX, mouseY, x + 15, y + 74, 250, 18)) {
-                KavoClient.targetMode = (KavoClient.targetMode + 1) % 3;
-                return true;
-            }
-            // Изменение плавности (цикл от 1 до 5)
-            if (isInside(mouseX, mouseY, x + 15, y + 96, 250, 18)) {
-                KavoClient.aimSmoothness += 1.0f;
-                if (KavoClient.aimSmoothness > 5.0f) KavoClient.aimSmoothness = 1.0f;
-                return true;
-            }
-            // Изменение угла FOV (цикл 45 -> 70 -> 90 -> 120 -> 160)
-            if (isInside(mouseX, mouseY, x + 15, y + 118, 250, 18)) {
-                if (KavoClient.aimFov == 45.0f) KavoClient.aimFov = 70.0f;
-                else if (KavoClient.aimFov == 70.0f) KavoClient.aimFov = 90.0f;
-                else if (KavoClient.aimFov == 90.0f) KavoClient.aimFov = 120.0f;
-                else if (KavoClient.aimFov == 120.0f) KavoClient.aimFov = 160.0f;
-                else KavoClient.aimFov = 45.0f;
-                return true;
-            }
-            // Изменение дистанции (3.5 -> 4.0 -> 4.5 -> 5.0)
-            if (isInside(mouseX, mouseY, x + 15, y + 140, 250, 18)) {
-                KavoClient.attackRange += 0.5f;
-                if (KavoClient.attackRange > 5.0f) KavoClient.attackRange = 3.5f;
-                return true;
-            }
-            // Круг FOV
-            if (isInside(mouseX, mouseY, x + 15, y + 162, 250, 18)) {
-                KavoClient.fovCircleEnabled = !KavoClient.fovCircleEnabled;
-                return true;
+
+            int contentX = mainX + sidebarW + 16;
+            int contentY = mainY + 16;
+            int cardW = mainW - sidebarW - 32;
+
+            if (selectedTab == Tab.COMBAT) {
+                if (in(mouseX, mouseY, contentX, contentY + 20, cardW, 26)) KavoClient.killauraEnabled = !KavoClient.killauraEnabled;
+                if (in(mouseX, mouseY, contentX, contentY + 52, cardW, 26)) KavoClient.aimbotEnabled = !KavoClient.aimbotEnabled;
+                if (in(mouseX, mouseY, contentX, contentY + 84, cardW, 26)) KavoClient.targetMode = (KavoClient.targetMode + 1) % 3;
+                if (in(mouseX, mouseY, contentX, contentY + 116, cardW, 26)) {
+                    KavoClient.attackRange = (KavoClient.attackRange >= 5.0f) ? 3.5f : KavoClient.attackRange + 0.5f;
+                }
+            } else if (selectedTab == Tab.VISUALS) {
+                if (in(mouseX, mouseY, contentX, contentY + 20, cardW, 26)) KavoClient.fovCircleEnabled = !KavoClient.fovCircleEnabled;
+                if (in(mouseX, mouseY, contentX, contentY + 52, cardW, 26)) KavoClient.rangeIndicatorEnabled = !KavoClient.rangeIndicatorEnabled;
+                if (in(mouseX, mouseY, contentX, contentY + 84, cardW, 26)) KavoClient.chinaHatEnabled = !KavoClient.chinaHatEnabled;
+                if (in(mouseX, mouseY, contentX, contentY + 116, cardW, 26)) KavoClient.trajectoriesEnabled = !KavoClient.trajectoriesEnabled;
             }
         }
         return super.mouseClicked(mouseX, mouseY, button);
     }
 
-    private boolean isInside(double mx, double my, int bx, int by, int bw, int bh) {
-        return mx >= bx && mx <= bx + bw && my >= by && my <= by + bh;
+    private boolean in(double mx, double my, int x, int y, int w, int h) {
+        return mx >= x && mx <= x + w && my >= y && my <= y + h;
     }
 }
